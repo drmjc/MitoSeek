@@ -2597,6 +2597,9 @@ pre {
     <h2>Table of Contents</h2>
         <ul>
             <li><a href="#M001">Command</a></li>
+HTML
+       if($qc){
+       print OUT <<HTML;
             <li> <a href="#M0">QC</a></li>
                 <ol>
                     <li> <a href="#M000">Percent of base pairs covered</a></li>
@@ -2605,6 +2608,9 @@ pre {
                     <li> <a href="#M02">Depth distribution</a></li>
                     <li> <a href="#M03">Template length distribution</a></li>
                 </ol>
+HTML
+       }
+       print OUT <<HTML;
             <li> <a href="#M1">Heteroplasmy</a></li>
             <li> <a href="#M4">Structural Changes</a></li>
             <li> <a href="#M2">Somatic Mutation</a></li>
@@ -2617,6 +2623,9 @@ pre {
         <p>Your command for generating this report, keep it in order to reproduce the result.</p>
         <pre>$commandline</pre>
     </div>
+HTML
+if($qc){
+    print OUT <<HTML;
     <div class="module"><h2 id="M0">QC</h2>
         <p>
         Quality control (QC) is applied to the mapped reads on mitochondria. If -L [bed] is provided, the QC report following is constrained to your provided region. The QC report contains the following 4 parts.
@@ -2726,10 +2735,12 @@ HTML
 HTML
     }
 }else{
-    print OUT "<b>Not Avaiable</b><br/>";
+    print OUT "<b>Not Available</b><br/>";
 }
+print OUT "    </div>";
+} # end if($qc)
+
 print OUT <<HTML;
-    </div>
     <div class="module"><h2 id="M1">Heteroplasmy</h2>
         <p>Heteroplasmy detection threshold is defined on two scales: read count (-ha) and read percentage (-hp). Read count denotes the number of reads we must observe to support heteroplasmy while read percentage denotes the percentage of reads we must observe to support heteroplasmy. Both scales can be used together or individually. The minimum recommended depth requirement (-d) for detecting heteroplasmy is 50. Lower depth will severely damage the confidence of heteroplasmy calling.</p>
 HTML
