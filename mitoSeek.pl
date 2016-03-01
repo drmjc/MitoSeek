@@ -58,6 +58,7 @@ my $flag_reverse_strand           = 0x0010;
 my $flag_next_read_reverse_strand = 0x0020;
 my $flag_first_fragment           = 0x0040;
 my $flag_second_fragment          = 0x0080;
+my $maxPileupDepth                = 50000;
 
 my $debug = 0;
 
@@ -435,9 +436,9 @@ sub _main{
         _move_mitogenome( $mitogenome{$inref}, $regionbed, $reference );
         
         _info($index.".1,Pileuping '$mitobam1' (Output:$mitopileup1)");
-        _pileup( $mitobam1, $isbam, $mbq, $regionbed, $reference, $mitopileup1 );
+        _pileup( $mitobam1, $isbam, $mmq, $mbq, $regionbed, $reference, $mitopileup1 );
         _info($index++.".2,Pileuping '$mitobam2' (Output:$mitopileup2)");
-        _pileup( $mitobam2, $isbam, $mbq, $regionbed, $reference, $mitopileup2 );       
+        _pileup( $mitobam2, $isbam, $mmq, $mbq, $regionbed, $reference, $mitopileup2 );       
         
         _info($index.".1,Parsing pileup file of '$mitopileup1' (Output: $mitobasecall1)");
         _parse_pileup( $mitopileup1, $mbq, $mitooffset1, $mitobasecall1 );
@@ -538,7 +539,7 @@ sub _main{
         _move_mitogenome( $mitogenome{$inref}, $regionbed, $reference );
         
         _info($index++.",Pileuping '$mitobam1' (Output:$mitopileup1)");
-        _pileup( $mitobam1, $isbam, $mbq, $regionbed, $reference, $mitopileup1 );
+        _pileup( $mitobam1, $isbam, $mmq, $mbq, $regionbed, $reference, $mitopileup1 );
         
         _info($index++.",Parsing pileup file of '$mitopileup1' (Output: $mitobasecall1)");
         _parse_pileup( $mitopileup1, $mbq, $mitooffset1, $mitobasecall1 );
@@ -810,9 +811,9 @@ sub _mito_cnv_by_reads{
 #For exom sequence bed is the region of exon while for whole genome, the bed is the region of all chromosome
 sub _mito_cnv_by_depth{
     my ($mitobam,$totalbam,$mitobases,$totalbases,$isbam,$mbq,$mmq,$bed,$mitodepthoutput,$totaldepthoutput) = @_;
-    my $com = "$samtools depth -q $mbq -Q mmq $mitobam > $mitodepthoutput";
+    my $com = "$samtools depth -q $mbq -Q $mmq $mitobam > $mitodepthoutput";
     _run($com);
-    $com = "$samtools depth -q $mbq -Q mmq -b $bed $totalbam >$totaldepthoutput";
+    $com = "$samtools depth -q $mbq -Q $mmq -b $bed $totalbam >$totaldepthoutput";
     _run($com);
     
     #Read the 
@@ -1571,7 +1572,11 @@ sub _determine_heteroplasmy {
         my $minor_allele = $atcg[1];
         my $totaldepth= $atcg{A} + $atcg{C} + $atcg{T} + $atcg{G} ;
         
-        next if ($totaldepth <= $depth);  #only have sufficiant depth will conduct heteroplasmy detection
+	if($atcg{$minor_allele} > 1) {
+		print STDERR "m.$loc$major_allele>$minor_allele, $atcg{$major_allele}:$atcg{$minor_allele}\n";
+	}
+
+        next if ($totaldepth <= $depth);  #only have sufficient depth will conduct heteroplasmy detection
 
         # Added on 2013-02-12, fisher test (left)
         my $heteroplasmy_fisher_pvalue = fisher_left($atcg{$major_allele},$atcg{$minor_allele},$hp/100);
@@ -1610,10 +1615,10 @@ sub _determine_heteroplasmy {
         #3 (heteroplasmy mutation pass cutoff but show strong strand bias)
         my $stat = 0;
         if ( $heteroplasmy > 0 ) {
-
+		print STDERR "m.$loc$major_allele>$minor_allele, $atcg{$major_allele}:$atcg{$minor_allele}, $heteroplasmy\n";
 #determine 1 or 2 at this stage (for value 3, need to first calculate strand bias across all the site, and then modify those with stat=2, only if when $sb is not equal to 0)
             #if ( $heteroplasmy > $hp / 100 && $atcg{$minor_allele} > $ha ) {
-            if ( $heteroplasmy > $hp / 100 && $atcg{$minor_allele} > $ha ) {  #use $depth which is not passed by function
+            if ( $heteroplasmy >= ($hp / 100) && $atcg{$minor_allele} > $ha ) {  #use $depth which is not passed by function
                 $stat = 2;
             }
             else {
@@ -2040,19 +2045,21 @@ sub _read_basecall {
 #Parameters:
 #$inbam  input bam or sam format file
 #$isbam  0/1, 0 indicates it's in sam format while 1 indicates a bam format
+#$mmq    minimum mapping quality
 #$mbq    minimum base quality
 #$refseq reference sequence to determine the reference allele
 #$outpileup  pileup output file
 sub _pileup {
-    my ( $inbam, $isbam, $mbq, $regionbed, $refseq, $outpileup ) = @_;
+    my ( $inbam, $isbam, $mmq, $mbq, $regionbed, $refseq, $outpileup ) = @_;
+    exit if -e $outpileup;
     my $comm = "";
     if ($isbam) {
         $comm =
-"$samtools mpileup -l $regionbed -Q $mbq -f $refseq $inbam > $outpileup 2>/dev/null";
+"$samtools mpileup -l $regionbed -Q $mmq -q $mbq -f $refseq $inbam -d $maxPileupDepth > $outpileup 2> $outpileup.out";
     }
     else {
         $comm =
-"$samtools view -Su $inbam | $samtools mpileup -l $regionbed -Q $mbq -f $refseq - > $outpileup 2>/dev/null";
+"$samtools view -Su $inbam | $samtools mpileup -l $regionbed -Q $mmq -q $mbq -f $refseq -d $maxPileupDepth - > $outpileup 2> $outpileup.out";
     }
     _run($comm);
 }
@@ -2066,6 +2073,7 @@ sub _pileup {
 
 sub _parse_pileup {
     my ( $inpileup, $mbq, $offset, $outbase ) = @_;
+    exit if -e $outbase;
     open( IN,  $inpileup )   or die $!;
     open( OUT, ">$outbase" ) or die $!;
 
